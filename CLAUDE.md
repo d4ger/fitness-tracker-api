@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FastAPI backend for the Fitness Tracker mobile app. Provides REST API for user authentication, workout tracking, and statistics.
 
+**Tech Stack:** FastAPI, PostgreSQL, SQLAlchemy, JWT (python-jose), Pydantic
+
 ## Development Commands
 
 ```bash
@@ -21,56 +23,46 @@ cp .env.example .env
 
 # Run development server
 uvicorn app.main:app --reload
+```
 
-# Run with specific host/port
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+## Environment Variables
+
+Required in `.env`:
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/fitness_tracker
+SECRET_KEY=your-secret-key
+ALGORITHM=HS256  # optional, defaults to HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60  # optional, defaults to 60
 ```
 
 ## Architecture
 
-### Project Structure
-
-```
-app/
-├── main.py           # FastAPI app entry point
-├── core/
-│   ├── config.py     # Settings from environment
-│   └── security.py   # JWT and password utilities
-├── db/
-│   └── database.py   # SQLAlchemy engine and session
-├── models/           # SQLAlchemy ORM models
-│   ├── user.py
-│   ├── workout.py
-│   └── exercise.py
-├── schemas/          # Pydantic request/response schemas
-│   ├── user.py
-│   ├── workout.py
-│   └── exercise.py
-└── routers/          # API endpoints
-    ├── auth.py       # /api/auth/*
-    ├── workouts.py   # /api/workouts/*
-    ├── exercises.py  # /api/workouts/{id}/exercises/*
-    └── stats.py      # /api/stats/*
-```
-
 ### Key Patterns
 
-- **UUID primary keys** for all models
-- **JWT authentication** via OAuth2 Bearer token
-- **Nested routes** for exercises under workouts
-- **Pydantic schemas** separate from SQLAlchemy models
-- **Dependency injection** for database sessions and current user
+**Dependency Injection:** The `get_current_user` dependency in `app/routers/auth.py:19` validates JWT tokens and returns the authenticated User. Import and use it as a dependency in protected routes:
+```python
+from app.routers.auth import get_current_user
+current_user: User = Depends(get_current_user)
+```
 
-### Authentication Flow
+**Database Sessions:** Use `get_db` from `app/db/database.py` for SQLAlchemy sessions. Tables are auto-created on startup via `Base.metadata.create_all()`.
 
-1. Register: `POST /api/auth/register`
-2. Login: `POST /api/auth/login` (returns JWT)
-3. Use token: `Authorization: Bearer <token>`
-4. Get user: `GET /api/auth/me`
+**UUID Primary Keys:** All models use UUID primary keys via `UUID(as_uuid=True)`.
 
-### Database
+**One Workout Per Day:** Workouts are unique per user per date. Creating a workout for an existing date returns 400.
 
-PostgreSQL with SQLAlchemy ORM. Tables created automatically on startup via `Base.metadata.create_all()`.
+### MuscleGroup Enum
+
+Defined in `app/models/exercise.py`:
+- Chest, Back, Legs, Shoulders, Arms, Core, Cardio
+
+### API Routes
+
+All routes prefixed with `/api`:
+- `/auth` - Authentication (login returns JWT in `access_token` field)
+- `/workouts` - CRUD + `/week` (weekly view) + `/date/{date}` (lookup by date)
+- `/workouts/{id}/exercises` - Nested exercise management
+- `/stats` - Summary, weekly stats, muscle group breakdown, streak calculation
 
 ## API Documentation
 
